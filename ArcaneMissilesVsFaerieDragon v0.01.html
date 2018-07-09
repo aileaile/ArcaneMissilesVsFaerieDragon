@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width,initial-scale=1, minimum-scale=1, maximum-scale=1,user-scalable=no">
+<html>
+<head>
+    <style>
+        body{
+            font-family:"微软雅黑" !important;
+        }
+		.card{
+			border:1px solid  black;width:180px;height:250px;display:inline-block;position:relative;
+		}
+		.health{
+			position:absolute;right:0;bottom:0;font-size:30px
+		}
+		.head{
+			height:100px;
+		}
+		#hps{
+			
+		}
+		.expList{
+			position:absolute;left:0;top:0;font-size:15px
+		}
+		
+		#hero{
+			border:1px solid  black;width:300px;height:175px;display:inline-block;position:relative;
+		}
+		.headInput{
+			width:30px;
+		}
+		.highExp{
+			color:green;
+		}
+		.midExp{
+			color:#ff9912;
+		}
+		.lowExp{
+			color:#b22222;
+		}
+		.hidden{
+			display:none;
+		}
+		.show{
+			
+		}
+    </style>
+	<script>
+	var resultArr;
+	var num;
+	var compareEList = function (obj1, obj2) {
+		var val1 = obj1.hp;
+		var val2 = obj2.hp;
+		if (val1 < val2) {
+			return 1;
+		} else if (val1 > val2) {
+			return -1;
+		} else {
+			return 0;
+		}            
+	} 
+	var compareAllPos = function (obj1, obj2) {
+		var val1 = obj1.expect;
+		var val2 = obj2.expect;
+		if (val1 < val2) {
+			return 1;
+		} else if (val1 > val2) {
+			return -1;
+		} else {
+			return 0;
+		}            
+	}
+	function draw(){
+		num = parseInt(document.getElementById('num').value);
+		if(num>7){
+			alert('差不多得了。');
+			return;
+		}
+		document.getElementById('hps').innerHTML = "英雄血量：<input id='heroHp' class='headInput'></input>";
+		document.getElementById('hps').innerHTML += "随从血量：";
+		for(var i = 1;i<=num;i++){
+			document.getElementById('hps').innerHTML += "<input id='hp"+i+"' class='headInput'></input>";
+		}
+		document.getElementById('hps').innerHTML += "飞弹个数：<input id='damage' class='headInput'></input>";
+		document.getElementById('hps').innerHTML += "<button onclick='ok()'>确定</button>";
+	}
+	function ok(){
+		var enemyArr= new Array();
+		var dmg = document.getElementById('damage').value;
+		if(dmg>10){
+			alert('这还用算？赢了。');
+			return;
+		}
+		var heroHp = parseInt(document.getElementById('heroHp').value);
+		if(heroHp>100){
+			alert('年迈的法师已经开始下一局了。');
+			return;
+		}
+		enemyArr[0] = new enemy(0,heroHp);
+		document.getElementById('heroDiv').innerHTML = '<div id="hero"><div id="heroExpList" class="expList"></div><div class="health">'+heroHp+'</div></div>';
+		document.getElementById('body').innerHTML = "";
+		for(var i = 1;i<=num;i++){
+			var hp = parseInt(document.getElementById('hp'+i).value);
+			if(hp>60){
+				alert('年迈的法师已经开始下一局了。');
+				return;
+			}
+			document.getElementById('body').innerHTML += '<div class="card"><div id="expList'+i+'" class="expList"></div><div class="health">'+hp+'</div></div>';
+			enemyArr[i] = new enemy(i,hp);
+		}
+		
+		
+		
+		//2构造树对象
+		var nodeTree = new Array(num+1);
+		for(var i = 0;i<num+1;i++){
+			var newEnemyArr = JSON.parse(JSON.stringify(enemyArr));
+			newEnemyArr[i].hp -= 1;
+			nodeTree[i] = new possibility(1,num+1,newEnemyArr,null);
+		}
+		
+		//3循环dmg
+		for(var i = 2;i<=dmg;i++){
+			buildTheTree(nodeTree,i);
+		}
+		
+		//4遍历TREE得结果集
+		resultArr = new Array();
+		for(var i = 0;i<nodeTree.length;i++){
+			traverseTree(nodeTree[i],nodeTree.length);
+		}
+		
+		//5整理结果集（合并结果相同的）
+		var showingResult = new Array();
+		for(var i = 0;i<resultArr.length;i++){
+			if(showingResult.length==0){
+				showingResult.push(resultArr[i]);
+			}else{
+				var isPush = true;
+				for(var j = 0;j<showingResult.length;j++){
+					if(compareRes(resultArr[i],showingResult[j])){
+						showingResult[j].expect += resultArr[i].expect;
+						isPush = false;
+						break;
+					}
+				}
+				if(isPush){
+					showingResult.push(resultArr[i]);
+				}
+			}
+		}
+
+		//TODO show all possibility to user;
+		showingResult.sort(compareAllPos);
+		document.getElementById('allPossibilities').innerHTML = "";
+		for(var i = 0;i<showingResult.length;i++){
+			document.getElementById('allPossibilities').innerHTML += ("概率:"+formatExpect(showingResult[i].expect)+"->");
+			var tempDetail = showingResult[i].resultDetail;
+			for(var j = 0;j<tempDetail.length;j++){
+				if(j == 0){
+					var prestr = "英雄:";
+				}else{
+					var prestr = "【随从"+j+"】:";
+				}
+				document.getElementById('allPossibilities').innerHTML += (prestr+tempDetail[j].hp+"&nbsp;&nbsp;");
+			}
+			document.getElementById('allPossibilities').innerHTML += "<br/>";
+		}
+		
+		
+		//6求期望值
+		var finalSortExpectList = new Array();
+		for(var i = 0;i<num+1 ; i++){
+			//here's i is id
+			var aExpectList = new expectList(i,null);
+			var eForHpListArr = new Array();
+			for(var j = 0;j<showingResult.length;j++){
+				var possibleHp = showingResult[j].resultDetail[i].hp;
+				if(eForHpListArr.length==0){
+					eForHpListArr.push(new eForHp(possibleHp,showingResult[j].expect));
+				}else{
+					var addHp = true;
+					for(var k = 0;k<eForHpListArr.length;k++){
+						if(eForHpListArr[k].hp == possibleHp){
+							eForHpListArr[k].expect += showingResult[j].expect;
+							addHp = false;
+							break;
+						}
+					}
+					if(addHp){
+						eForHpListArr.push(new eForHp(possibleHp,showingResult[j].expect));
+					}
+				}
+			}
+			aExpectList.eList = eForHpListArr;
+			finalSortExpectList.push(aExpectList);
+		}
+		
+		//7 draw the result on website
+		var herolist = finalSortExpectList[0].eList.sort(compareEList);
+		document.getElementById('heroExpList').innerHTML = "";
+		for(var i = 0;i<herolist.length;i++){
+			document.getElementById('heroExpList').innerHTML += ("生命值:"+herolist[i].hp+",概率:"+formatExpect(herolist[i].expect)+";<br/>");
+		}
+		
+		for(var i = 1;i<=num;i++){
+			var list = finalSortExpectList[i].eList.sort(compareEList);
+			document.getElementById('expList'+i).innerHTML = "";
+			for(var j=0;j<list.length;j++){
+				document.getElementById('expList'+i).innerHTML += ("生命值:"+list[j].hp+",概率:"+formatExpect(list[j].expect)+";<br/>");
+			}
+		}
+		
+		
+		
+	}
+	
+	//util funcitons
+	function expend(){
+		if(document.getElementById('allPossibilities').className == 'hidden'){
+			document.getElementById('allPossibilities').className = 'show';
+			document.getElementById('btn3').innerText = '关闭所有结果';
+		}else{
+			document.getElementById('allPossibilities').className = 'hidden';
+			document.getElementById('btn3').innerText = '展开所有结果';
+		}
+	}
+	
+	function formatExpect(expect){
+		expect *= 100;
+		if(expect >= 60){
+			expect = "<font class='highExp'>"+(""+expect).substring(0,5)+"%</font>";
+		}else if(expect >=30){
+			expect = "<font class='midExp'>"+(""+expect).substring(0,5)+"%</font>";
+		}else{
+			expect = "<font class='lowExp'>"+(""+expect).substring(0,5)+"%</font>";
+		}
+		return expect;
+	}
+	
+	function buildTheTree(nodeArr,roundNum){
+		for(var j = 0;j<nodeArr.length;j++){
+			if(nodeArr[j]!=undefined){
+				if(nodeArr[j].childrenNode == null){//childrenNode is null
+					var insideEnemy = JSON.parse(JSON.stringify(nodeArr[j].nodeDetail));
+					var insideSiblingNum = insideEnemy.length;
+					//count alive number
+					for(var k = 0;k<insideEnemy.length;k++){
+						if(insideEnemy[k].hp == 0){
+							insideSiblingNum -= 1;
+						}
+					}
+					nodeArr[j].childrenNode = new Array(insideSiblingNum);
+					//create childrenNode
+					for(var l = 0;l<insideEnemy.length;l++){
+						if(insideEnemy[l].hp>0){
+							var nextNodeDetail = JSON.parse(JSON.stringify(nodeArr[j].nodeDetail));
+							nextNodeDetail[l].hp -= 1;
+							nodeArr[j].childrenNode[l] = new possibility(roundNum,insideSiblingNum,nextNodeDetail,null);
+						}
+					}
+				}else{//childrennode is not null
+					buildTheTree(nodeArr[j].childrenNode,roundNum);
+				}
+			}
+		}
+	}	
+	
+	function compareRes(result1,result2){
+		for(var i = 0;i<result1.resultDetail.length;i++){
+			if(!compareEnemy(result1.resultDetail[i],result2.resultDetail[i])){
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	function compareEnemy(e1,e2){//TO compare enemy in result
+		if(e1.id == e2.id && e1.hp == e2.hp){
+			return true;
+		}
+		return false;
+	}
+	
+	function traverseTree(node,oppP){
+		if(node.childrenNode!=null && node.childrenNode.length > 0){
+			for(var i = 0;i<node.childrenNode.length;i++){
+				if(node.childrenNode[i]!=null){
+					traverseTree(node.childrenNode[i],oppP * node.childrenNode[i].siblingNodeNum);
+				}
+			}
+		}else{
+			var finalP = parseFloat(1/oppP);
+			var res = new result(finalP,node.nodeDetail);
+			resultArr.push(res);
+		}
+	}
+	//below are objects
+	function result(expect,resultDetail){
+		this.expect = expect;
+		this.resultDetail = resultDetail;
+	}
+	
+	function expectList(id,eList){
+		this.id = id;
+		this.eList = eList; //this is eForHp arr
+	}
+	
+	function eForHp(hp,expect){
+		this.hp = hp;
+		this.expect =  expect;
+	}
+	
+	function enemy(id,hp){
+		this.id=id;
+		this.hp=hp;
+	}
+	
+	function possibility(round,siblingNodeNum,nodeDetail,childrenNode){
+		this.round = round;
+		this.siblingNodeNum = siblingNodeNum;
+		this.nodeDetail = nodeDetail;
+		this.childrenNode = childrenNode;
+	}
+	</script>
+</head>
+<body>
+	<div class="head">
+		随从数量：<input id="num"  class='headInput'></input>
+		<button onclick="draw()">确定</button>
+		<div id="hps"></div>
+	</div>
+	<div id="tips"></div>
+	<div id="heroDiv"></div>
+	<div id="body">	</div>
+	<button id="btn3" onclick="expend()">展开所有结果</button>
+	<div id="allPossibilities" class="hidden"></div>
+</body>
+</html>
